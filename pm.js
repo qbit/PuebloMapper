@@ -2,6 +2,29 @@ var url = 'http://maps.co.pueblo.co.us/outside/rest/services/pueblo_county_parce
 
 var geocoder = new google.maps.Geocoder();
 
+var styles = {
+    'Point': [new ol.style.Style({
+	image: new ol.style.Circle({
+	    radius: 5,
+	    fill: new ol.style.Fill({color: 'red'}),
+	    stroke: new ol.style.Stroke({color: 'red', width: 1})
+	})
+    })],
+    'MultiPoint': [new ol.style.Style({
+	image: new ol.style.Circle({
+	    radius: 1,
+	    fill: new ol.style.Fill({color: 'red'}),
+	    stroke: new ol.style.Stroke({color: 'red', width: 3})
+	}),
+	fill: new ol.style.Fill({color: 'rgba(255,255,255,0.4)'}),
+	stroke: new ol.style.Stroke({color: 'green', width: 1})
+    })]
+};
+
+function getStyle(feat, geom) {
+    return styles[feat.getGeometry().getType()];
+}
+
 function extend(coord) {
     var a = [];
     a.push(coord);
@@ -21,18 +44,9 @@ var pgis = new ol.layer.Tile({
 
 var vectorSource = new ol.source.Vector();
 
-var vStyle = [new ol.style.Style({
-    stroke: new ol.style.Stroke({
-	color: 'blue',
-	width: 10
-    }),
-    fill: new ol.style.Fill({
-	color: 'rgba(0, 0, 255, 0.1)'
-    })
-})];
-
 var vectorLayer = new ol.layer.Vector({
-    source: vectorSource
+    source: vectorSource,
+    style: getStyle
 });
 
 
@@ -56,20 +70,13 @@ var map = new ol.Map({
 });
 
 function drawFeat(feat) {
-    vectorSource.clear();
-
     if (typeof feat === 'string') {
 	feat = JSON.parse(feat);
     }
 
     var geom = feat.features[0].geometry.rings[0];
 
-    var i, l;
-    for (i = 0, l = geom.length; i < l; i++) {
-    }
-
-    var poly = new ol.Feature(new ol.geom.Polygon(geom));
-    poly.setStyle(vStyle);
+    var poly = new ol.Feature(new ol.geom.MultiPoint(geom));
 
     vectorSource.addFeature(poly);
 }
@@ -96,9 +103,10 @@ function getInfo(coord, fn) {
 
     var a = jsonUrl + '?' + $.param(jsonOpts);
 
+    vectorSource.clear();
     $.get(a, function(data) {
-	fn.call(null, JSON.parse(data));
 	drawFeat(data);
+	fn.call(null, JSON.parse(data));
     });
 }
 
@@ -108,7 +116,7 @@ function fillTable(feat) {
 
     table.addClass('table-striped');
 
-    for (key in feat.features[0].attributes) {
+    for (var key in feat.features[0].attributes) {
 	var val = feat.features[0].attributes[key];
 
 	if (key.match(/AssessorURL/i)) {
@@ -119,7 +127,7 @@ function fillTable(feat) {
 	    val = $('<a>').text(val).attr('href', val);
 	}
 
-	table.append($('<tr>').append($('<td>').html(key), $('<td>').html(val)))
+	table.append($('<tr>').append($('<td>').html(key), $('<td>').html(val)));
     }
 
     $('#info').append(table);
@@ -135,12 +143,16 @@ map.on('singleclick', function(evt) {
 
 $('#searchBtn').click(function() {
     var address = $('#search').val();
+
     geocoder.geocode({'address': address}, function(results, status) {
 	if (results.length > 0) {
 	    var lng = results[0].geometry.location.lng();
 	    var lat = results[0].geometry.location.lat();
 	    var coord = [lng, lat];
 	    coord = ol.proj.transform(coord, 'EPSG:4326', 'EPSG:3857');
+
+	    vectorSource.addFeature(new ol.Feature(new ol.geom.Point(coord)));
+
 	    view.setCenter(coord);
 	    view.setZoom(19);
 
