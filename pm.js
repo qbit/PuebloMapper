@@ -1,5 +1,7 @@
 var url = 'http://maps.co.pueblo.co.us/outside/rest/services/pueblo_county_parcels_bld_footprints/MapServer/export';
 
+var geocoder = new google.maps.Geocoder();
+
 function extend(coord) {
     var a = [];
     a.push(coord);
@@ -17,12 +19,29 @@ var pgis = new ol.layer.Tile({
     })
 });
 
+var vectorSource = new ol.source.Vector();
+
+var vStyle = [new ol.style.Style({
+    stroke: new ol.style.Stroke({
+	color: 'blue',
+	width: 10
+    }),
+    fill: new ol.style.Fill({
+	color: 'rgba(0, 0, 255, 0.1)'
+    })
+})];
+
+var vectorLayer = new ol.layer.Vector({
+    source: vectorSource
+});
+
 
 var layers = [
     new ol.layer.Tile({
 	source: new ol.source.MapQuest({layer: 'osm'})
     }),
-    pgis
+    pgis,
+    vectorLayer
 ];
 
 var view = new ol.View({
@@ -36,8 +55,26 @@ var map = new ol.Map({
     view: view
 });
 
-map.on('singleclick', function(evt) {
-    document.getElementById('info').innerHTML = '';
+function drawFeat(feat) {
+    vectorSource.clear();
+
+    if (typeof feat === 'string') {
+	feat = JSON.parse(feat);
+    }
+
+    var geom = feat.features[0].geometry.rings[0];
+
+    var i, l;
+    for (i = 0, l = geom.length; i < l; i++) {
+    }
+
+    var poly = new ol.Feature(new ol.geom.Polygon(geom));
+    poly.setStyle(vStyle);
+
+    vectorSource.addFeature(poly);
+}
+
+function getInfo(coord, fn) {
     var jsonUrl = 'http://maps.co.pueblo.co.us/outside/rest/services/pueblo_county_parcels_bld_footprints/MapServer/2/query';
 
     var jsonOpts = {
@@ -45,7 +82,7 @@ map.on('singleclick', function(evt) {
 	returnGeometry: 'true',
 	spatialRel: 'esriSpatialRelIntersects',
 	geometry: JSON.stringify({
-	    rings: [extend(evt.coordinate)],
+	    rings: [extend(coord)],
 	    spatialReference: {
 		wkid: 102100,
 		latestWkid: 3857
@@ -59,20 +96,57 @@ map.on('singleclick', function(evt) {
 
     var a = jsonUrl + '?' + $.param(jsonOpts);
 
-    $('#info').innerHTML = '';
-
     $.get(a, function(data) {
-	var feat = JSON.parse(data);
-	var table = $('<table>');
+	fn.call(null, JSON.parse(data));
+	drawFeat(data);
+    });
+}
 
-	table.addClass('table-striped');
+function fillTable(feat) {
+    $('#info').html('');
+    var table = $('<table>');
 
-	for (key in feat.features[0].attributes) {
-	    var val = feat.features[0].attributes[key];
+    table.addClass('table-striped');
 
-	    table.append($('<tr>').append($('<td>').html(key), $('<td>').html(val)))
+    for (key in feat.features[0].attributes) {
+	var val = feat.features[0].attributes[key];
+
+	if (key.match(/AssessorURL/i)) {
+	    val = "http://www.co.pueblo.co.us/cgi-bin/webatrbroker.wsc/propertyinfo.p?par=" + feat.features[0].attributes.PAR_NUM;
 	}
 
-	$('#info').append(table);
+	if (val && typeof val === 'string' && val.match(/http/i)) {
+	    val = $('<a>').text(val).attr('href', val);
+	}
+
+	table.append($('<tr>').append($('<td>').html(key), $('<td>').html(val)))
+    }
+
+    $('#info').append(table);
+}
+
+map.on('singleclick', function(evt) {
+    document.getElementById('info').innerHTML = '';
+
+    getInfo(evt.coordinate, function(data) {
+	fillTable(data);
+    });
+});
+
+$('#searchBtn').click(function() {
+    var address = $('#search').val();
+    geocoder.geocode({'address': address}, function(results, status) {
+	if (results.length > 0) {
+	    var lng = results[0].geometry.location.lng();
+	    var lat = results[0].geometry.location.lat();
+	    var coord = [lng, lat];
+	    coord = ol.proj.transform(coord, 'EPSG:4326', 'EPSG:3857');
+	    view.setCenter(coord);
+	    view.setZoom(19);
+
+	    getInfo(coord, function(data) {
+		fillTable(data);
+	    });
+	}
     });
 });
