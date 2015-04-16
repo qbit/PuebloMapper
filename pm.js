@@ -56,14 +56,6 @@ var vectorLayer = new ol.layer.Vector({
     style: getStyle
 });
 
-var OSM = new ol.layer.Group({
-    layers: [
-	new ol.layer.Tile({
-	    source: new ol.source.MapQuest({layer: 'osm'})
-	})
-    ]
-});
-
 var SAT = new ol.layer.Group({
     layers:[
 	new ol.layer.Tile({
@@ -90,20 +82,35 @@ var map = new ol.Map({
     view: view
 });
 
+map.on('moveend', function(evt) {
+    parseHash();
+});
+
 function drawFeat(feat) {
-    console.log('drawfeat');
     if (typeof feat === 'string') {
 	feat = JSON.parse(feat);
     }
+    //    vectorSource.clear();
 
-    if (feat.features.length > 0) {
+    var geom = feat.features[0].geometry.rings[0];
+    var poly = new ol.Feature(new ol.geom.MultiPoint(geom));
 
-	var geom = feat.features[0].geometry.rings[0];
-	var poly = new ol.Feature(new ol.geom.MultiPoint(geom));
-
-	vectorSource.addFeature(poly);
-    }
+    vectorSource.addFeature(poly);
 }
+
+function clicker(evt) {
+    document.getElementById('info').innerHTML = '';
+    setHash(evt.coordinate);
+    view.setCenter(evt.coordinate);
+    vectorSource.clear();
+
+    getInfo(evt.coordinate, function(data) {
+	fillTable(data);
+	drawFeat(data);
+    });
+}
+
+map.on('singleclick', clicker);
 
 function getInfo(coord, fn) {
     var jsonUrl = 'http://maps.co.pueblo.co.us/outside/rest/services/pueblo_county_parcels_bld_footprints/MapServer/2/query';
@@ -128,7 +135,6 @@ function getInfo(coord, fn) {
 
 
     $.get(a, function(data) {
-	drawFeat(data);
 	fn.call(null, JSON.parse(data));
     });
 }
@@ -162,42 +168,38 @@ function fillTable(feat) {
     $('#info').append(table);
 }
 
-map.on('singleclick', function(evt) {
-    document.getElementById('info').innerHTML = '';
-    vectorSource.clear();
-
-    setLocation(evt.coordinate, view.getZoom());
-    saveLocation(evt.coordinate);
-    setHash();
-
-    getInfo(evt.coordinate, function(data) {
-	fillTable(data);
-    });
-});
-
-function saveLocation(coords, zoom) {
-    console.log("savelocation");
-    $.cookie('coords', coords || view.getCenter());
-}
-
-function getLocation() {
-    var c = $.cookie('coords'), i, l;
-    if (c) {
-	c = c.split(',');
-	for (i = 0, l = c.length; i < l; i++) {
-	    c[i] = parseFloat(c[i]);
-	}
-	return c;
-    }
-}
-
-
 function setHash(coords, zoom) {
-    console.log("sethash");
     var c = coords || view.getCenter();
     var z = zoom || view.getZoom();
     window.location.hash = "/" + z + '/' + c.join('/');
 }
+
+function doSearch() {
+    var address = $('#search').val();
+    geocoder.geocode({'address': address}, function(results, status) {
+	if (results.length > 0) {
+	    var lng = results[0].geometry.location.lng();
+	    var lat = results[0].geometry.location.lat();
+	    var coord = [lng, lat];
+	    coord = ol.proj.transform(coord, 'EPSG:4326', 'EPSG:3857');
+
+	    vectorSource.clear();
+	    vectorSource.addFeature(new ol.Feature(new ol.geom.Point(coord)));
+
+	    view.setCenter(coord);
+	    view.setZoom(18);
+
+	    setHash(coord, 18);
+
+	    getInfo(coord, function(data) {
+		fillTable(data);
+		drawFeat(data);
+	    });
+	}
+    });
+}
+
+$('#searchBtn').click(doSearch);
 
 function parseHash(initial) {
     var parts = window.location.hash.split('/');
@@ -206,51 +208,22 @@ function parseHash(initial) {
 
 	var z = parts.shift();
 	var coords = parts;
-
-	var oldCoords = getLocation();
-	if (oldCoords && oldCoords.length === 2 && initial) {
-	    view.setCenter(oldCoords);
-	    getInfo(oldCoords, function(data) {
-		fillTable(data);
-	    });
-	} else {
-	    setLocation(coords, z);
-	}
+	//view.setCenter(coords);
+	//view.setZoom(z);
+	//clicker(coords);
+	getInfo(coords, function(data) {
+	    fillTable(data);
+	    drawFeat(data);
+	});
     }
 }
 
-
-function setLocation(coords, zoom) {
-    console.log("setlocation");
-    view.setCenter(coords);
-    view.setZoom(zoom || 19);
-}
-
-function doSearch() {
-    var address = $('#search').val();
-
-    geocoder.geocode({'address': address}, function(results, status) {
-	if (results.length > 0) {
-	    var lng = results[0].geometry.location.lng();
-	    var lat = results[0].geometry.location.lat();
-	    var coord = [lng, lat];
-	    coord = ol.proj.transform(coord, 'EPSG:4326', 'EPSG:3857');
-
-	    vectorSource.addFeature(new ol.Feature(new ol.geom.Point(coord)));
-	    setLocation(coord);
-
-	    getInfo(coord, function(data) {
-		fillTable(data);
-	    });
-	}
-    });
-}
-
-parseHash(true);
-
-$(window).on('popstate', function() {
-    parseHash();
-});
+parseHash();
+/*
+  $(window).on('popstate', function() {
+  parseHash();
+  });
 
 
-$('#searchBtn').click(doSearch);
+
+*/
