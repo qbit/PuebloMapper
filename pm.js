@@ -1,6 +1,104 @@
 var padUrl = 'http://maps.co.pueblo.co.us/outside/rest/services/pueblo_county_parcels_bld_footprints/MapServer/export';
-
 var geocoder = new google.maps.Geocoder();
+var vectorSource = new ol.source.Vector();
+var vectorLayer = new ol.layer.Vector({
+    source: vectorSource,
+    style: getStyle
+});
+
+function prettyUrl(key, val) {
+    key = key || val;
+    return $('<a>').text(key).attr('href', val);
+}
+
+function prettyMoney(key, val) {
+    var ret = "";
+    if (val) {
+	ret = "$ " + val;
+    }
+    return ret;
+}
+
+var prettyMap = {
+    "Actual Improvement Value": {"ImprovementsActualValue": prettyMoney},
+    "Actual Land Value": {"LandActualValue": prettyMoney},
+    "Acres": {"Shape.STArea()": function(k, v) {
+	var val = parseFloat(v) / parseFloat("43560.00");
+	val = Number((val).toFixed(1));
+	return val;
+    }},
+    "Assessed Improvement Value": {"ImprovementsAssessedValue": prettyMoney},
+    "Assessed Land Value": {"LandAssessedValue": prettyMoney},
+    "Assessor Link": {"AssessorURL": prettyUrl},
+    "Electricity Provider": "electric",
+    "Fire Department": "Fire",
+    "Gas Provider": "gas",
+    "Legal Description": "LegalDescription",
+    "Levy Link": {"LevyURL": prettyUrl},
+    "Mobile Home": "MobileHomePresent",
+    "Neighborhood": "Neighborhood",
+    "Owner Address": ["OwnerStreetAddress", "OwnerCity", "OwnerState", "OwnerZip", "OwnerCountry"],
+    "Owner": ["OwnerOverflow", "SubOnwer1", "SubOwner2"],
+    "Property Tax": {"PropertyTax": prettyMoney},
+    "Senior Exemption": "SeniorExemption",
+    "Subdivision": "Subdivision",
+    "Tax District": "TaxDistrict",
+    "Tax Exemption": "TaxExempt",
+    "Telecom Provider": "telecom",
+    "Water Provider": "water",
+    "Zoning Link": {"ZoningURL": prettyUrl},
+    "Zoning": "Zoning"
+};
+
+var layers = [
+    new ol.layer.Tile({
+	style: 'OSM',
+	source: new ol.source.OSM()
+    }),
+    new ol.layer.Tile({
+	style: 'Road',
+	source: new ol.source.MapQuest({layer: 'osm'})
+    }),
+    new ol.layer.Tile({
+	style: 'Aerial',
+	visible: false,
+	source: new ol.source.MapQuest({layer: 'sat'})
+    }),
+    new ol.layer.Group({
+	style: 'AerialWithLabels',
+	visible: false,
+	layers: [
+	    new ol.layer.Tile({
+		source: new ol.source.MapQuest({layer: 'sat'})
+	    }),
+	    new ol.layer.Tile({
+		source: new ol.source.MapQuest({layer: 'hyb'})
+	    })
+	]
+    }),
+    new ol.layer.Group({
+	visible: true,
+	style: 'AlwaysShow',
+	layers: [
+	    new ol.layer.Tile({
+		extent: [-13884991, 2870341, -7455066, 6338219],
+		visible: true,
+		source: new ol.source.TileArcGISRest({
+		    url: padUrl
+		})
+	    }),
+	    new ol.layer.Tile({
+		extent: [-13884991, 2870341, -7455066, 6338219],
+		visible: true,
+		source: new ol.source.XYZ({
+		    url: 'water_wells/{z}/{x}/{y}.png',
+		    //url: 'http://localhost:8080/example/{z}/{x}/{y}.png',
+		})
+	    }),
+	    vectorLayer
+	]
+    })
+];
 
 var styles = {
     'Point': [new ol.style.Style({
@@ -35,45 +133,9 @@ function extend(coord) {
     return a;
 }
 
-var pgis = new ol.layer.Tile({
-    extent: [-13884991, 2870341, -7455066, 6338219],
-    source: new ol.source.TileArcGISRest({
-	url: padUrl
-    })
-});
-
-var wells =   new ol.layer.Tile({
-    extent: [-13884991, 2870341, -7455066, 6338219],
-    source: new ol.source.XYZ({
-	url: 'http://localhost:8080/example/{z}/{x}/{y}.png',
-    })
-});
-
-var vectorSource = new ol.source.Vector();
-
-var vectorLayer = new ol.layer.Vector({
-    source: vectorSource,
-    style: getStyle
-});
-
-var SAT = new ol.layer.Group({
-    layers:[
-	new ol.layer.Tile({
-	    source: new ol.source.MapQuest({layer: 'sat'})
-	})
-    ]
-});
-
-var layers = [
-    SAT,
-    pgis,
-    wells,
-    vectorLayer
-];
-
 var view = new ol.View({
     center: ol.proj.transform([-104.65, 38.25], 'EPSG:4326', 'EPSG:3857'),
-    zoom: 15
+    zoom: getHash('zoom') || 15
 });
 
 var map = new ol.Map({
@@ -82,15 +144,12 @@ var map = new ol.Map({
     view: view
 });
 
-map.on('moveend', function(evt) {
-    parseHash();
-});
 
-function drawFeat(feat) {
+
+function drawFeat(feat, caller) {
     if (typeof feat === 'string') {
 	feat = JSON.parse(feat);
     }
-    //    vectorSource.clear();
 
     var geom = feat.features[0].geometry.rings[0];
     var poly = new ol.Feature(new ol.geom.MultiPoint(geom));
@@ -106,11 +165,14 @@ function clicker(evt) {
 
     getInfo(evt.coordinate, function(data) {
 	fillTable(data);
-	drawFeat(data);
+	drawFeat(data, "clicker");
     });
 }
 
 map.on('singleclick', clicker);
+map.on('moveend', function(evt) {
+    setHash();
+});
 
 function getInfo(coord, fn) {
     var jsonUrl = 'http://maps.co.pueblo.co.us/outside/rest/services/pueblo_county_parcels_bld_footprints/MapServer/2/query';
@@ -145,33 +207,85 @@ function fillTable(feat) {
 
     table.addClass('table-striped');
 
-    for (var key in feat.features[0].attributes) {
-	var val = feat.features[0].attributes[key];
+    for (var namer in prettyMap) {
+	key = namer;
+	val = prettyMap[namer];
+	switch (typeof prettyMap[namer]) {
+	case "string":
+	    table.append($('<tr>').append($('<td>').html(key), $('<td>').html(feat.features[0].attributes[val])));
+	    break;
+	case "object":
+	    if (val.hasOwnProperty(length)) {
+		var ii, ll, v = [];
 
-	if (key.match(/Shape.STArea\(\)/)) {
-	    key = "Acres";
-	    val = parseFloat(val) / parseFloat("43560.00");
-	    val = Number((val).toFixed(1));
+		for (ii = 0, ll = val.length; ii < ll; ii++) {
+		    var item = feat.features[0].attributes[val[ii]];
+		    if (item) {
+			item = item.trim();
+		    } else {
+			item = "";
+		    }
+		    if (item !== "") {
+			v.push(feat.features[0].attributes[val[ii]]);
+		    }
+		}
+		val = v.join("<br />");
+		table.append($('<tr>').append($('<td>').html(key), $('<td>').html(val)));
+	    } else {
+		var kk, vv;
+		for (kk in val) {
+		    vv = val[kk];
+		    table.append($('<tr>').append($('<td>').html(key), $('<td>').html(vv(key, feat.features[0].attributes[kk]))));
+		}
+	    }
+	    break;
+	default:
+	    table.append($('<tr>').append($('<td>').html(namer), $('<td>').html(val)));
+	    break;
 	}
-
-	if (key.match(/AssessorURL/i)) {
-	    val = "http://www.co.pueblo.co.us/cgi-bin/webatrbroker.wsc/propertyinfo.p?par=" + feat.features[0].attributes.PAR_NUM;
-	}
-
-	if (val && typeof val === 'string' && val.match(/http/i)) {
-	    val = $('<a>').text(val).attr('href', val);
-	}
-
-	table.append($('<tr>').append($('<td>').html(key), $('<td>').html(val)));
     }
 
     $('#info').append(table);
+}
+
+function getHash(item) {
+    var ret;
+    var parts = parseHash();
+    if (parts) {
+
+	if (item === 'zoom') {
+	    ret = parts[0];
+	}
+
+	if (item === 'coords') {
+	    ret = parts[1];
+	}
+	return ret;
+    }
 }
 
 function setHash(coords, zoom) {
     var c = coords || view.getCenter();
     var z = zoom || view.getZoom();
     window.location.hash = "/" + z + '/' + c.join('/');
+}
+
+function parseHash(initial) {
+    var parts = window.location.hash.split('/');
+    if (parts.length > 3) {
+	parts.shift(); // clobber the #
+
+	var z = parts.shift();
+	var coords = parts;
+	if (initial) {
+	    getInfo(coords, function(data) {
+		fillTable(data);
+		drawFeat(data, "parsehash");
+	    });
+	} else {
+	    return [z, coords];
+	}
+    }
 }
 
 function doSearch() {
@@ -193,37 +307,30 @@ function doSearch() {
 
 	    getInfo(coord, function(data) {
 		fillTable(data);
-		drawFeat(data);
+		drawFeat(data, "dosearch");
 	    });
 	}
     });
 }
 
 $('#searchBtn').click(doSearch);
-
-function parseHash(initial) {
-    var parts = window.location.hash.split('/');
-    if (parts.length > 3) {
-	parts.shift(); // clobber the #
-
-	var z = parts.shift();
-	var coords = parts;
-	//view.setCenter(coords);
-	//view.setZoom(z);
-	//clicker(coords);
-	getInfo(coords, function(data) {
-	    fillTable(data);
-	    drawFeat(data);
-	});
+$('#search').keyup(function(e) {
+    if (e.which === 13) {
+	doSearch();
     }
-}
+});
 
-parseHash();
-/*
-  $(window).on('popstate', function() {
-  parseHash();
-  });
+parseHash(true);
 
+$('#layer-select').change(function() {
+    var style = $(this).find(':selected').val();
+    var i, ii;
+    for (i = 0, ii = layers.length; i < ii; ++i) {
+	var ls = layers[i].get('style');
+	if (ls != 'AlwaysShow') {
+	    layers[i].set('visible', (layers[i].get('style') == style));
+	}
+    }
+});
 
-
-*/
+$('#layer-select').trigger('change');
