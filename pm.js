@@ -8,7 +8,9 @@ var vectorLayer = new ol.layer.Vector({
 
 function prettyUrl(key, val) {
     key = key || val;
-    return $('<a>').text(key).attr('href', val);
+    if (val && val !== "") {
+	return $('<a>').text(key).attr('href', val);
+    }
 }
 
 function prettyMoney(key, val) {
@@ -39,6 +41,7 @@ var prettyMap = {
     "Neighborhood": "Neighborhood",
     "Owner Address": ["OwnerStreetAddress", "OwnerCity", "OwnerState", "OwnerZip", "OwnerCountry"],
     "Owner": ["OwnerOverflow", "SubOnwer1", "SubOwner2"],
+    "Parcel Number": "PAR_NUM",
     "Property Tax": {"PropertyTax": prettyMoney},
     "Senior Exemption": "SeniorExemption",
     "Subdivision": "Subdivision",
@@ -49,6 +52,16 @@ var prettyMap = {
     "Zoning Link": {"ZoningURL": prettyUrl},
     "Zoning": "Zoning"
 };
+
+var agisSrc = new ol.source.TileArcGISRest({
+    url: padUrl,
+    attributions: [
+	new ol.Attribution({
+	    html: 'Pueblo County ' +
+		'<a href="http://maps.pueblo.org">Maps</a>'
+	})
+    ]
+});
 
 var layers = [
     new ol.layer.Tile({
@@ -83,16 +96,13 @@ var layers = [
 	    new ol.layer.Tile({
 		extent: [-13884991, 2870341, -7455066, 6338219],
 		visible: true,
-		source: new ol.source.TileArcGISRest({
-		    url: padUrl
-		})
+		source: agisSrc
 	    }),
 	    new ol.layer.Tile({
 		extent: [-13884991, 2870341, -7455066, 6338219],
 		visible: true,
 		source: new ol.source.XYZ({
-		    url: 'water_wells/{z}/{x}/{y}.png',
-		    //url: 'http://localhost:8080/example/{z}/{x}/{y}.png',
+		    url: 'http://wms.deftly.net/water_wells/{z}/{x}/{y}.png',
 		})
 	    }),
 	    vectorLayer
@@ -212,7 +222,9 @@ function fillTable(feat) {
 	val = prettyMap[namer];
 	switch (typeof prettyMap[namer]) {
 	case "string":
-	    table.append($('<tr>').append($('<td>').html(key), $('<td>').html(feat.features[0].attributes[val])));
+	    if (key && feat.features[0].attributes[val]) {
+		table.append($('<tr>').append($('<td>').html(key), $('<td>').html(feat.features[0].attributes[val])));
+	    }
 	    break;
 	case "object":
 	    if (val.hasOwnProperty(length)) {
@@ -230,17 +242,24 @@ function fillTable(feat) {
 		    }
 		}
 		val = v.join("<br />");
-		table.append($('<tr>').append($('<td>').html(key), $('<td>').html(val)));
+		if (key && val) {
+		    table.append($('<tr>').append($('<td>').html(key), $('<td>').html(val)));
+		}
 	    } else {
 		var kk, vv;
 		for (kk in val) {
 		    vv = val[kk];
-		    table.append($('<tr>').append($('<td>').html(key), $('<td>').html(vv(key, feat.features[0].attributes[kk]))));
+		    var nvv = vv(key, feat.features[0].attributes[kk]);
+		    if (key && nvv) {
+			table.append($('<tr>').append($('<td>').html(key), $('<td>').html(nvv)));
+		    }
 		}
 	    }
 	    break;
 	default:
-	    table.append($('<tr>').append($('<td>').html(namer), $('<td>').html(val)));
+	    if (namer && val) {
+		table.append($('<tr>').append($('<td>').html(namer), $('<td>').html(val)));
+	    }
 	    break;
 	}
     }
