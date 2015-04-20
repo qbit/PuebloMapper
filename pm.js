@@ -66,23 +66,25 @@ var agisSrc = new ol.source.TileArcGISRest({
 var layers = [
     new ol.layer.Tile({
 	style: 'OSM',
+	visible: false,
 	source: new ol.source.OSM()
     }),
     new ol.layer.Tile({
 	style: 'Road',
+	visible: false,
 	source: new ol.source.MapQuest({layer: 'osm'})
     }),
     new ol.layer.Tile({
-	style: 'Aerial',
+	style: 'Satellite',
 	visible: false,
-	source: new ol.source.MapQuest({layer: 'sat'})
+	source: new ol.source.BingMaps({key: 'Aq7e23Eva6DtRFf1iZPllRqUNjHM-zN7ap_TegK6IUm9HuO7a8KeeeiU3b10tFr9', imagerySet: 'Aerial'})
     }),
     new ol.layer.Group({
-	style: 'AerialWithLabels',
-	visible: false,
+	style: 'SatWithLabels',
+	visible: true,
 	layers: [
 	    new ol.layer.Tile({
-		source: new ol.source.MapQuest({layer: 'sat'})
+		source: new ol.source.BingMaps({key: 'Aq7e23Eva6DtRFf1iZPllRqUNjHM-zN7ap_TegK6IUm9HuO7a8KeeeiU3b10tFr9', imagerySet: 'AerialWithLabels'})
 	    }),
 	    new ol.layer.Tile({
 		source: new ol.source.MapQuest({layer: 'hyb'})
@@ -103,6 +105,11 @@ var layers = [
 		visible: true,
 		source: new ol.source.XYZ({
 		    url: 'http://wms.deftly.net/water_wells/{z}/{x}/{y}.png',
+		    attributions: [
+			new ol.Attribution({
+			    html: '<a href="http://water.state.co.us/Home/Pages/default.aspx">CDNR</a>'
+			})
+		    ]
 		})
 	    }),
 	    vectorLayer
