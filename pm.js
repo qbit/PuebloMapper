@@ -1,19 +1,29 @@
-var padUrl = 'http://maps.co.pueblo.co.us/outside/rest/services/pueblo_county_parcels_bld_footprints/MapServer/export';
+var padUrl = 'http://maps.co.pueblo.co.us/outside/rest/services/pueblo_county_parcels_bld_footprints/MapServer';
 var geocoder = new google.maps.Geocoder();
 var vectorSource = new ol.source.Vector();
 var vectorLayer = new ol.layer.Vector({
     source: vectorSource,
     style: getStyle
 });
+var utfGridSource = new ol.source.TileUTFGrid({
+    //url: "http://wms.deftly.net/utfgrid_water_wells/{z}/{x}/{y}.json"
+    url: "http://wms.deftly.net/utfgrid_water_wells/0/0/0.json"
+});
+var utfGridLayer = new ol.layer.Tile({source: utfGridSource});
 
-function prettyUrl(key, val) {
+function prettyUrl(key, val, attrs) {
     key = key || val;
     if (val && val !== "") {
 	return $('<a>').text(key).attr('href', val);
     }
 }
 
-function prettyMoney(key, val) {
+function totalImprovement(key, val, attrs) {
+    var tot = parseInt(attrs["ImprovementsActualValue"], 10) + parseInt(attrs["LandActualValue"], 10);
+    return "$ " + tot;
+}
+
+function prettyMoney(key, val, attrs) {
     var ret = "";
     if (val) {
 	ret = "$ " + val;
@@ -22,34 +32,55 @@ function prettyMoney(key, val) {
 }
 
 var prettyMap = {
+    "Parcel Number": "PAR_NUM",
+
+    "break0": "Owner Info:",
+
+    "Owner": ["OwnerOverflow", "SubOnwer1", "SubOwner2"],
+    "Owner Address": ["OwnerStreetAddress", "OwnerCity", "OwnerState", "OwnerZip", "OwnerCountry"],
+    "Legal Description": "LegalDescription",
+
+    "break1": "Values:",
+
+    "Total Improvement Value": {"_": totalImprovement},
     "Actual Improvement Value": {"ImprovementsActualValue": prettyMoney},
     "Actual Land Value": {"LandActualValue": prettyMoney},
+    "Assessed Improvement Value": {"ImprovementsAssessedValue": prettyMoney},
+    "Assessed Land Value": {"LandAssessedValue": prettyMoney},
+    "Property Tax": {"PropertyTax": prettyMoney},
+
+    "break5": "Links:",
+
+    "Assessor Link": {"AssessorURL": prettyUrl},
+    "Levy Link": {"LevyURL": prettyUrl},
+    "Zoning Link": {"ZoningURL": prettyUrl},
+
+    "break2": "Services:",
+
+    "Electricity Provider": "electric",
+    "Fire Department": "Fire",
+    "Gas Provider": "gas",
+    "Telecom Provider": "telecom",
+    "Water Provider": "water",
+
+    "break3": "Land Information:",
+
     "Acres": {"Shape.STArea()": function(k, v) {
 	var val = parseFloat(v) / parseFloat("43560.00");
 	val = Number((val).toFixed(1));
 	return val;
     }},
-    "Assessed Improvement Value": {"ImprovementsAssessedValue": prettyMoney},
-    "Assessed Land Value": {"LandAssessedValue": prettyMoney},
-    "Assessor Link": {"AssessorURL": prettyUrl},
-    "Electricity Provider": "electric",
-    "Fire Department": "Fire",
-    "Gas Provider": "gas",
-    "Legal Description": "LegalDescription",
-    "Levy Link": {"LevyURL": prettyUrl},
     "Mobile Home": "MobileHomePresent",
     "Neighborhood": "Neighborhood",
-    "Owner Address": ["OwnerStreetAddress", "OwnerCity", "OwnerState", "OwnerZip", "OwnerCountry"],
-    "Owner": ["OwnerOverflow", "SubOnwer1", "SubOwner2"],
-    "Parcel Number": "PAR_NUM",
-    "Property Tax": {"PropertyTax": prettyMoney},
     "Senior Exemption": "SeniorExemption",
     "Subdivision": "Subdivision",
+
+    "break4": "Tax:",
+
     "Tax District": "TaxDistrict",
     "Tax Exemption": "TaxExempt",
-    "Telecom Provider": "telecom",
-    "Water Provider": "water",
-    "Zoning Link": {"ZoningURL": prettyUrl},
+
+
     "Zoning": "Zoning"
 };
 
@@ -59,6 +90,15 @@ var agisSrc = new ol.source.TileArcGISRest({
 	new ol.Attribution({
 	    html: 'Pueblo County ' +
 		'<a href="http://maps.pueblo.org">Maps</a>'
+	})
+    ]
+});
+
+var deftXYZsrc = new ol.source.XYZ({
+    url: 'http://wms.deftly.net/water_wells/{z}/{x}/{y}.png',
+    attributions: [
+	new ol.Attribution({
+	    html: '<a href="http://water.state.co.us/Home/Pages/default.aspx">CDNR</a>'
 	})
     ]
 });
@@ -103,16 +143,10 @@ var layers = [
 	    new ol.layer.Tile({
 		extent: [-13884991, 2870341, -7455066, 6338219],
 		visible: true,
-		source: new ol.source.XYZ({
-		    url: 'http://wms.deftly.net/water_wells/{z}/{x}/{y}.png',
-		    attributions: [
-			new ol.Attribution({
-			    html: '<a href="http://water.state.co.us/Home/Pages/default.aspx">CDNR</a>'
-			})
-		    ]
-		})
+		source: deftXYZsrc
 	    }),
-	    vectorLayer
+	    vectorLayer,
+	    utfGridLayer
 	]
     })
 ];
@@ -229,8 +263,12 @@ function fillTable(feat) {
 	val = prettyMap[namer];
 	switch (typeof prettyMap[namer]) {
 	case "string":
-	    if (key && feat.features[0].attributes[val]) {
-		table.append($('<tr>').append($('<td>').html(key), $('<td>').html(feat.features[0].attributes[val])));
+	    if (key.match(/^break\d/)) {
+		table.append($('<tr>').append($('<td colspan="2">').html("<b>" + val + "</b>")));
+	    } else {
+		if (key && feat.features[0].attributes[val]) {
+		    table.append($('<tr>').append($('<td>').html(key), $('<td>').html(feat.features[0].attributes[val])));
+		}
 	    }
 	    break;
 	case "object":
@@ -256,7 +294,7 @@ function fillTable(feat) {
 		var kk, vv;
 		for (kk in val) {
 		    vv = val[kk];
-		    var nvv = vv(key, feat.features[0].attributes[kk]);
+		    var nvv = vv(key, feat.features[0].attributes[kk], feat.features[0].attributes);
 		    if (key && nvv) {
 			table.append($('<tr>').append($('<td>').html(key), $('<td>').html(nvv)));
 		    }
@@ -360,3 +398,26 @@ $('#layer-select').change(function() {
 });
 
 $('#layer-select').trigger('change');
+
+var mapElement = document.getElementById('map');
+
+var displayCountryInfo = function(coordinate) {
+    var viewResolution = /** @type {number} */ (view.getResolution());
+    utfGridSource.forDataAtCoordinateAndResolution(coordinate, viewResolution, function(data) {
+	// If you want to use the template from the TileJSON,
+	//  load the mustache.js library separately and call
+	//  info.innerHTML = Mustache.render(gridSource.getTemplate(), data);
+	mapElement.style.cursor = data ? 'pointer' : '';
+	if (data) {
+	    console.log(data);
+	}
+    });
+};
+
+map.on('pointermove', function(evt) {
+    if (evt.dragging) {
+	return;
+    }
+    var coordinate = map.getEventCoordinate(evt.originalEvent);
+    displayCountryInfo(coordinate);
+});
