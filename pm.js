@@ -188,12 +188,7 @@ var wellImg = L.tileLayer("http://wms.deftly.net/water_wells/{z}/{x}/{y}.png", {
     minZoom: 16
 });
 
-/*var bl = L.tileLayer('https://{s}.tiles.mapbox.com/v3/{id}/{z}/{x}/{y}.png', {
-  maxZoom: 18,
-  attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, ' + '<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' + 'Imagery © <a href="http://mapbox.com">Mapbox</a>',
-  id: 'examples.map-i875mjb7'
-  });*/
-var bl = new L.Google();
+var bl = new L.Google('HYBRID');
 
 var parcels = new L.esri.imageMapLayer("http://maps.co.pueblo.co.us/outside/rest/services/pueblo_county_parcels_bld_footprints/MapServer/export", {
     maxZoom: 18,
