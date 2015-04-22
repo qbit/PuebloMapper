@@ -198,6 +198,14 @@ var parcels = new L.esri.imageMapLayer("http://maps.co.pueblo.co.us/outside/rest
     noData: 0
 });
 
+var hydrants = new L.esri.imageMapLayer("http://maps.co.pueblo.co.us/outside/rest/services/FireHydrants/MapServer/export", {
+    maxZoom: 18,
+    minZoom: 16,
+    format: 'png32',
+    transparent: true,
+    noData: 0
+});
+
 var popupTemplate = "<h3>{PAR_NUM}</h3><small></small>";
 var wellTemplate = "<h3>{receipt}</h3><small>Permit: {permit}</small>";
 var log = true;
@@ -240,6 +248,7 @@ var baseMaps = {
 
 var overlayMaps = {
     "Wells": wellImg,
+    "Fire Hydrants": hydrants,
     "Parcels": parcels
 };
 
