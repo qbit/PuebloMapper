@@ -206,6 +206,14 @@ var hydrants = new L.esri.imageMapLayer("http://maps.co.pueblo.co.us/outside/res
     noData: 0
 });
 
+var roofPermits = new L.esri.imageMapLayer("http://rbdgis.pprbd.org/arcgispublic/rest/services/Permit_Reroofs/MapServer/export", {
+    maxZoom: 18,
+    minZoom: 16,
+    format: 'png32',
+    transparent: true,
+    noData: 0
+});
+
 var popupTemplate = "<h3>{PAR_NUM}</h3><small></small>";
 var wellTemplate = "<h3>{receipt}</h3><small>Permit: {permit}</small>";
 var log = true;
@@ -249,7 +257,8 @@ var baseMaps = {
 var overlayMaps = {
     "Wells": wellImg,
     "Fire Hydrants": hydrants,
-    "Parcels": parcels
+    "Parcels": parcels,
+    "Roof Permits": roofPermits
 };
 
 L.control.layers(baseMaps, overlayMaps).addTo(map);
