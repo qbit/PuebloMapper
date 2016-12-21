@@ -29,7 +29,7 @@ var wellMap = {
 var wellKeyMap = {
     receipt: function(p) {
 	return $('<a>').text(p)
-	    .attr('href', 'http://www.dwr.state.co.us/WellPermitSearch/View.aspx?receipt=' + p)
+	    .attr('href', 'https://www.dwr.state.co.us/WellPermitSearch/View.aspx?receipt=' + p)
 	    .attr('target', '_blank');
     }
 };
@@ -180,12 +180,17 @@ function fillTable(feat) {
     $('#info').append(table);
 }
 
-var utfGrid = new L.UtfGrid('http://wms.deftly.net/utfgrid_water_wells/{z}/{x}/{y}.json?callback={cb}', {
+var utfGrid = new L.UtfGrid('https://wms.bolddaemon.com/utfgrid_water_wells/{z}/{x}/{y}.json?callback={cb}', {
 });
 
-var wellImg = L.tileLayer("http://wms.deftly.net/water_wells/{z}/{x}/{y}.png", {
+var wellImg = L.tileLayer("https://wms.bolddaemon.com/water_wells/{z}/{x}/{y}.png", {
     maxZoom: 18,
     minZoom: 16
+});
+
+var weather = L.tileLayer('https://{s}.tile.openweathermap.org/map/clouds/{z}/{x}/{y}.png', {
+    attribution: 'Map data © OpenWeatherMap',
+    maxZoom: 18
 });
 
 var bl = new L.Google('HYBRID');
@@ -206,14 +211,49 @@ var hydrants = new L.esri.imageMapLayer("http://maps.co.pueblo.co.us/outside/res
     noData: 0
 });
 
-var roofPermits = new L.esri.imageMapLayer("http://rbdgis.pprbd.org/arcgispublic/rest/services/Permit_Reroofs/MapServer/export", {
+var roofPermits = new L.esri.imageMapLayer("http://rbdgis.pprbd.org/arcgispublic/rest/services/Permit_Reroofs/MapServer/3/export", {
     maxZoom: 18,
     minZoom: 16,
-    format: 'png32',
-    transparent: true,
-    noData: 0
+
+    style: function() {
+	return {
+	    color: '#5B7CBA',
+	    weight: 2
+	};
+    }
 });
 
+/*
+var permitLabels = {};
+roofPermits.on('createfeature', function(e){
+    console.log(e);
+    var id = e.feature.id;
+    var feature = roofPermits.getFeature(id);
+    var center = feature.getBounds().getCenter();
+    var label = L.marker(center, {
+	icon: new L.DivIcon({
+	    iconSize: null,
+	    className: 'label',
+	    html: '<div>' + e.feature.attributes.address + '</div>'
+	})
+    }).addTo(map);
+    permitLabels[id] = label;
+});
+
+roofPermits.on('addfeature', function(e){
+    var label = permitLabels[e.feature.id];
+    if(label){
+	label.addTo(map);
+    }
+});
+
+roofPermits.on('removefeature', function(e){
+    var label = permitLabels[e.feature.id];
+    if(label){
+	map.removeLayer(label);
+    }
+});
+*/
 var popupTemplate = "<h3>{PAR_NUM}</h3><small></small>";
 var wellTemplate = "<h3>{receipt}</h3><small>Permit: {permit}</small>";
 var log = true;
@@ -225,7 +265,7 @@ utfGrid.on('mouseover', function (e) {
 var map = L.map('map', {
     center: [38.25, -104.65],
     zoom: 13,
-    layers: [bl, parcels, wellImg]
+    layers: [bl, parcels, wellImg, weather]
 });
 
 var service = L.esri.Services.featureLayer({
@@ -250,6 +290,8 @@ map.on('click', function(e) {
 
 map.addLayer(utfGrid);
 
+
+
 var baseMaps = {
     "Google": bl
 };
@@ -258,7 +300,8 @@ var overlayMaps = {
     "Wells": wellImg,
     "Fire Hydrants": hydrants,
     "Parcels": parcels,
-    "Roof Permits": roofPermits
+    "Roof Permits": roofPermits,
+    "Weather": weather
 };
 
 L.control.layers(baseMaps, overlayMaps).addTo(map);
